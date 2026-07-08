@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Nova Status Bar</string>
+    <string name="accessibility_service_description">Displays a custom status bar overlay showing clock, battery, and notification icon styles. Does not collect or share any personal data.</string>
+    <string name="enable_overlay">Enable Custom Status Bar</string>
+    <string name="grant_overlay_permission">Grant Overlay Permission</string>
+    <string name="grant_accessibility_permission">Grant Accessibility Permission</string>
+    <string name="clock_format">Clock Format</string>
+    <string name="icon_color">Icon Color</string>
+    <string name="battery_style">Battery Style</string>
+    <string name="touch_actions">Touch Actions</string>
+</resources>

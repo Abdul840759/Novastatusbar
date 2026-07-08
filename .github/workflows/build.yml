@@ -1,0 +1,51 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install required SDK packages
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+
+      - name: Install Gradle 8.7
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip
+          unzip -q gradle-8.7-bin.zip
+          echo "$PWD/gradle-8.7/bin" >> "$GITHUB_PATH"
+
+      - name: Build debug APK
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-status-bar-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Attach APK to GitHub Release (tag pushes only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/debug/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
