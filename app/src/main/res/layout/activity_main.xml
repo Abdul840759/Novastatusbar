@@ -75,7 +75,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Transparent Background"
+                android:text="Auto-Match Background Color (fake transparency)"
                 android:textColor="@color/bar_white"
                 android:textSize="15sp" />
 
@@ -84,6 +84,29 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content" />
         </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Auto-matching needs Android 11+. Below that (or if it fails, e.g. on a secure lock screen), the fallback color below is used instead - the bar never goes truly transparent."
+            android:textColor="@color/bar_gray"
+            android:textSize="11sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Fallback Bar Color"
+            android:textColor="@color/bar_gray"
+            android:textSize="13sp"
+            android:layout_marginTop="12dp" />
+
+        <LinearLayout
+            android:id="@+id/fallbackColorSwatchRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp" />
 
         <!-- Auto-hide in fullscreen apps -->
         <LinearLayout

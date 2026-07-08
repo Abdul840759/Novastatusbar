@@ -6,8 +6,17 @@ notification badges, and lock-screen support. Original code throughout.
 
 ## Feature list
 
-- **Clock, battery %, transparent bar** — matches wallpaper/app content like
-  real One UI, with a toggle back to solid black if you want more contrast.
+- **Clock, battery %** — real charging state (charging bolt vs plain outline),
+  live percentage.
+- **Fake transparency (not real transparency)** — the bar is **always
+  opaque** and never lets the real system UI show through. On Android 11+ it
+  samples the actual on-screen pixels just below the bar (via
+  `AccessibilityService.takeScreenshot()`, the only public API that exposes
+  rendered pixel colors) and smoothly animates the bar's solid background to
+  match, once every 2.5s at most, only on app switches - not continuously,
+  to protect battery on your Hot 10 Lite. Below Android 11, or whenever
+  sampling fails (e.g. secure lock screens), it falls back to a fixed color
+  you choose in settings.
 - **Lock screen support** — the overlay window uses `FLAG_SHOW_WHEN_LOCKED`
   and recalculates its height against the real status bar dimen (including
   the landscape-specific one where available), so it should sit aligned with
@@ -59,8 +68,19 @@ notification badges, and lock-screen support. Original code throughout.
 
 ## Getting an APK onto your phone — no Android Studio needed
 
-This repo includes a GitHub Actions workflow that builds a ready-to-install
-debug APK automatically. To use it:
+Every push to `main` builds the APK and commits it to `releases/nova-status-bar.apk`
+in this repo, so you get a **permanent direct-download link** — no zip, no
+Releases page needed:
+
+```
+https://raw.githubusercontent.com/<your-username>/<repo-name>/main/releases/nova-status-bar.apk
+```
+
+Open that link straight in your phone's browser and it downloads the APK
+directly. Every time you push a change and the build succeeds, that same link
+always points at the latest build.
+
+Alternatively:
 
 ```bash
 cd StarStatusClone

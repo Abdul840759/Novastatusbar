@@ -1,94 +1,120 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="32dp"
-    android:background="@android:color/transparent"
-    android:orientation="horizontal"
-    android:gravity="center_vertical"
-    android:paddingHorizontal="16dp">
+    android:background="@color/bar_black">
 
-    <!-- Carrier name (optional, editable in settings) -->
-    <TextView
-        android:id="@+id/tvCarrierName"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="MTN NG"
-        android:textColor="@color/bar_white"
-        android:textSize="12sp"
-        android:layout_marginEnd="8dp" />
-
-    <!-- Clock -->
-    <TextView
-        android:id="@+id/tvClock"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:text="9:41"
-        android:textColor="@color/bar_white"
-        android:textSize="13sp"
-        android:textStyle="bold" />
-
-    <!-- Fake notification icons (real installed-app icons, max 5) -->
+    <!-- LEFT ZONE: nothing else may ever be placed here.
+         Unlocked: clock + fake notification icons.
+         Locked: carrier name only (the two groups are toggled, never both visible). -->
     <LinearLayout
-        android:id="@+id/notificationIconRow"
+        android:id="@+id/leftZone"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_alignParentStart="true"
+        android:layout_marginStart="16dp"
         android:orientation="horizontal"
-        android:gravity="center_vertical" />
-
-    <!-- Live system-state icons (bluetooth, hotspot, DND, etc. - added/removed dynamically) -->
-    <LinearLayout
-        android:id="@+id/systemIconRow"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical" />
-
-    <!-- Network type (5G/4G/3G...) -->
-    <TextView
-        android:id="@+id/tvNetworkType"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="6dp"
-        android:text="4G"
-        android:textColor="@color/bar_white"
-        android:textSize="11sp"
-        android:textStyle="bold" />
-
-    <!-- Real cellular signal strength -->
-    <ImageView
-        android:id="@+id/ivSignal"
-        android:layout_width="16dp"
-        android:layout_height="16dp"
-        android:layout_marginStart="4dp"
-        android:src="@drawable/ic_status_signal"
-        android:contentDescription="@null" />
-
-    <!-- Battery pill -->
-    <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="22dp"
-        android:layout_marginStart="8dp"
-        android:background="@drawable/bg_pill"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingHorizontal="8dp">
-
-        <ImageView
-            android:id="@+id/ivBatteryIcon"
-            android:layout_width="14dp"
-            android:layout_height="14dp"
-            android:src="@android:drawable/ic_lock_idle_charging"
-            android:contentDescription="@null" />
+        android:gravity="center_vertical">
 
         <TextView
-            android:id="@+id/tvBatteryPct"
+            android:id="@+id/tvCarrierName"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="4dp"
-            android:text="100%"
+            android:text="MTN NG"
             android:textColor="@color/bar_white"
-            android:textSize="12sp" />
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/unlockedLeftGroup"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tvClock"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="9:41"
+                android:textColor="@color/bar_white"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:id="@+id/notificationIconRow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical" />
+
+        </LinearLayout>
     </LinearLayout>
 
-</LinearLayout>
+    <!-- RIGHT ZONE: nothing else may ever be placed here. Overflow icons
+         beyond the cap are silently dropped by StatusIconManager rather
+         than wrapping or pushing into the center. -->
+    <LinearLayout
+        android:id="@+id/rightZone"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_alignParentEnd="true"
+        android:layout_marginEnd="16dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <LinearLayout
+            android:id="@+id/systemIconRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical" />
+
+        <TextView
+            android:id="@+id/tvNetworkType"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:text="4G"
+            android:textColor="@color/bar_white"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/ivSignal"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_marginStart="4dp"
+            android:src="@drawable/ic_status_signal"
+            android:contentDescription="@null" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="22dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_pill"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="8dp">
+
+            <ImageView
+                android:id="@+id/ivBatteryIcon"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:src="@drawable/ic_status_battery"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/tvBatteryPct"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="100%"
+                android:textColor="@color/bar_white"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+</RelativeLayout>

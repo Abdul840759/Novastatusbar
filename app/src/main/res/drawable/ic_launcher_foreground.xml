@@ -4,7 +4,24 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- Phone body outline -->
     <path
-        android:fillColor="#8E5AF7"
-        android:pathData="M54,24 L61,45 L83,45 L65,58 L72,79 L54,66 L36,79 L43,58 L25,45 L47,45 Z" />
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4"
+        android:pathData="M38,20 h32 a8,8 0 0 1 8,8 v52 a8,8 0 0 1 -8,8 h-32 a8,8 0 0 1 -8,-8 v-52 a8,8 0 0 1 8,-8 z" />
+
+    <!-- Status bar strip at the top of the phone -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,24 h40 v10 h-40 z" />
+
+    <!-- Status bar dots/icons (clock + battery pill motif) -->
+    <path android:fillColor="#1428A0" android:pathData="M38,27.5m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0" />
+    <path android:fillColor="#1428A0" android:pathData="M64,26h8a2,2 0,0 1,2 2v3a2,2 0,0 1,-2 2h-8a2,2 0,0 1,-2 -2v-3a2,2 0,0 1,2 -2z" />
+
+    <!-- Home indicator -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M46,82 h16 v3 h-16 z" />
 </vector>

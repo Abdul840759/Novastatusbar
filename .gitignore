@@ -10,6 +10,7 @@
 /app/build
 /app/release
 *.apk
+!/releases/*.apk
 *.ap_
 *.dex
 *.class

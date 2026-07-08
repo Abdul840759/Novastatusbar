@@ -1,8 +1,10 @@
 package com.abdulazeez.statusclone
 
 import android.app.AlarmManager
+import android.app.KeyguardManager
 import android.app.NotificationManager
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -12,19 +14,15 @@ import android.media.AudioManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.nfc.NfcAdapter
+import android.os.BatteryManager
 import android.os.PowerManager
 import android.provider.Settings
 import android.telephony.TelephonyManager
 
-/**
- * Snapshot of every toggle-able system state we can detect without root.
- * "Hotspot" uses an undocumented-but-widely-relied-on broadcast action,
- * since there's no public API for it - flagged in the README as the
- * most likely thing to need per-device tuning.
- */
 data class SystemState(
     val mobileDataOn: Boolean = false,
     val bluetoothOn: Boolean = false,
+    val bluetoothConnected: Boolean = false,
     val hotspotOn: Boolean = false,
     val airplaneModeOn: Boolean = false,
     val ringerMode: Int = AudioManager.RINGER_MODE_NORMAL,
@@ -34,7 +32,9 @@ data class SystemState(
     val nfcOn: Boolean = false,
     val locationOn: Boolean = false,
     val vpnOn: Boolean = false,
-    val alarmSet: Boolean = false
+    val alarmSet: Boolean = false,
+    val isCharging: Boolean = false,
+    val isLocked: Boolean = false
 )
 
 class SystemStateWatcher(
@@ -44,13 +44,23 @@ class SystemStateWatcher(
     private var state = SystemState()
     private var registered = false
     private var lastKnownHotspotState = false
+    private var lastKnownCharging = false
+    private var lastKnownBtConnected = false
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context, intent: Intent) {
-            if (intent.action == "android.net.wifi.WIFI_AP_STATE_CHANGED") {
-                // extra name used across AOSP/most OEMs: "wifi_state"; value 13 == WIFI_AP_STATE_ENABLED
-                val wifiApState = intent.getIntExtra("wifi_state", -1)
-                lastKnownHotspotState = wifiApState == 13
+            when (intent.action) {
+                "android.net.wifi.WIFI_AP_STATE_CHANGED" -> {
+                    val wifiApState = intent.getIntExtra("wifi_state", -1)
+                    lastKnownHotspotState = wifiApState == 13 // WIFI_AP_STATE_ENABLED
+                }
+                Intent.ACTION_BATTERY_CHANGED -> {
+                    val plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0)
+                    val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+                    lastKnownCharging = plugged != 0 || status == BatteryManager.BATTERY_STATUS_CHARGING
+                }
+                BluetoothDevice.ACTION_ACL_CONNECTED -> lastKnownBtConnected = true
+                BluetoothDevice.ACTION_ACL_DISCONNECTED -> lastKnownBtConnected = false
             }
             refresh()
         }
@@ -61,7 +71,9 @@ class SystemStateWatcher(
         val filter = IntentFilter().apply {
             addAction(ConnectivityManager.CONNECTIVITY_ACTION)
             addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
-            addAction("android.net.wifi.WIFI_AP_STATE_CHANGED") // undocumented hotspot broadcast
+            addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+            addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+            addAction("android.net.wifi.WIFI_AP_STATE_CHANGED")
             addAction(Intent.ACTION_AIRPLANE_MODE_CHANGED)
             addAction(AudioManager.RINGER_MODE_CHANGED_ACTION)
             addAction(TelephonyManager.ACTION_PHONE_STATE_CHANGED)
@@ -70,6 +82,10 @@ class SystemStateWatcher(
             addAction(NfcAdapter.ACTION_ADAPTER_STATE_CHANGED)
             addAction(LocationManager.PROVIDERS_CHANGED_ACTION)
             addAction(AlarmManager.ACTION_NEXT_ALARM_CLOCK_CHANGED)
+            addAction(Intent.ACTION_BATTERY_CHANGED)
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_USER_PRESENT)
         }
         context.registerReceiver(receiver, filter)
         registered = true
@@ -86,11 +102,11 @@ class SystemStateWatcher(
         registered = false
     }
 
-    /** Re-reads everything from the relevant system services and reports if anything changed. */
     fun refresh() {
         val newState = SystemState(
             mobileDataOn = isMobileDataOn(),
             bluetoothOn = isBluetoothOn(),
+            bluetoothConnected = lastKnownBtConnected,
             hotspotOn = lastKnownHotspotState,
             airplaneModeOn = isAirplaneModeOn(),
             ringerMode = ringerMode(),
@@ -100,7 +116,9 @@ class SystemStateWatcher(
             nfcOn = isNfcOn(),
             locationOn = isLocationOn(),
             vpnOn = isVpnOn(),
-            alarmSet = isAlarmSet()
+            alarmSet = isAlarmSet(),
+            isCharging = lastKnownCharging,
+            isLocked = isLocked()
         )
         if (newState != state) {
             state = newState
@@ -109,6 +127,11 @@ class SystemStateWatcher(
     }
 
     // ---------- individual checks ----------
+
+    private fun isLocked(): Boolean {
+        val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager ?: return false
+        return km.isKeyguardLocked
+    }
 
     private fun isMobileDataOn(): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
@@ -120,7 +143,6 @@ class SystemStateWatcher(
     private fun isBluetoothOn(): Boolean = try {
         BluetoothAdapter.getDefaultAdapter()?.isEnabled == true
     } catch (_: SecurityException) {
-        // Needs BLUETOOTH_CONNECT on API 31+; caller should have requested it.
         false
     }
 

@@ -9,6 +9,7 @@ import android.content.IntentFilter
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.os.BatteryManager
 import android.os.Handler
 import android.os.Looper
@@ -17,6 +18,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityWindowInfo
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -24,20 +26,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/**
- * Draws a custom "One UI style" status bar as a system overlay window.
- *
- * Responsibilities:
- *  - Recomputes bar height/width on orientation change (landscape support).
- *  - Shows on the lock screen too (FLAG_SHOW_WHEN_LOCKED), aligned to the
- *    real status bar's actual height/cutout.
- *  - Hides itself when the foreground app is fullscreen/immersive.
- *  - Transparent background by default.
- *  - Carrier name (real or user override), auto/manual network-type label,
- *    live system-state icons (bluetooth, hotspot, DND, etc. via
- *    SystemStateWatcher + StatusIconManager), and up to 5 fake
- *    notification icons pulled from the user's own installed apps.
- */
 class StatusBarAccessibilityService : AccessibilityService() {
 
     private lateinit var windowManager: WindowManager
@@ -47,6 +35,12 @@ class StatusBarAccessibilityService : AccessibilityService() {
 
     private lateinit var stateWatcher: SystemStateWatcher
     private var iconManager: StatusIconManager? = null
+    private var lastState: SystemState = SystemState()
+    private lateinit var colorSampler: BackgroundColorSampler
+    private var currentBarColor: Int = Color.BLACK
+
+    /** Manual hide from the shade/quick-settings-open check - always wins regardless of the auto-hide setting. */
+    private var shadeForcedHidden = false
 
     private val clockHandler = Handler(Looper.getMainLooper())
     private lateinit var clockRunnable: Runnable
@@ -62,8 +56,6 @@ class StatusBarAccessibilityService : AccessibilityService() {
         prefs = PrefsManager(this)
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
-        // Needed so we can inspect the foreground window's bounds to detect
-        // fullscreen/immersive apps and auto-hide, same as the real status bar.
         serviceInfo = serviceInfo.also {
             it.flags = it.flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         }
@@ -71,18 +63,20 @@ class StatusBarAccessibilityService : AccessibilityService() {
         addOverlay()
         startClockTicker()
         registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        colorSampler = BackgroundColorSampler(this)
 
         stateWatcher = SystemStateWatcher(this) { state ->
+            lastState = state
             if (prefs.showSystemStateIcons) iconManager?.render(state)
+            applyLockState(state.isLocked)
+            applyChargingIcon(state.isCharging)
         }
         stateWatcher.start()
 
         loadFakeNotificationIcons()
         updateCarrierAndNetworkType()
+        requestColorSample()
 
-        // Live-apply any change made in the settings screen (color, battery
-        // style, transparency, auto-hide, carrier, network, icons) without
-        // needing to restart the service.
         prefs.raw.registerOnSharedPreferenceChangeListener(prefsListener)
     }
 
@@ -94,6 +88,9 @@ class StatusBarAccessibilityService : AccessibilityService() {
                 key == "network_type_mode" || key == "manual_network_type"
             ) {
                 updateCarrierAndNetworkType()
+            }
+            if (key == "fake_transparency_enabled" || key == "fallback_bar_color") {
+                requestColorSample()
             }
         }
 
@@ -126,23 +123,16 @@ class StatusBarAccessibilityService : AccessibilityService() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        // Screen rotated (portrait <-> landscape): recompute bar height and re-layout.
         val view = overlayView ?: return
         val params = layoutParams ?: return
         params.height = currentBarHeightPx()
         try {
             windowManager.updateViewLayout(view, params)
         } catch (_: IllegalArgumentException) {
-            // View was already detached (e.g. service restarting) - ignore.
+            // View was already detached - ignore.
         }
     }
 
-    /**
-     * Status bar height differs between portrait and landscape on many
-     * OEM skins, and devices with a punch-hole/cutout report a taller
-     * value than the plain dimen. Try the landscape-specific dimen first,
-     * then fall back to the standard one.
-     */
     private fun currentBarHeightPx(): Int {
         val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         val name = if (isLandscape) "status_bar_height_landscape" else "status_bar_height"
@@ -156,7 +146,17 @@ class StatusBarAccessibilityService : AccessibilityService() {
         return (dp * metrics.density).toInt()
     }
 
-    // ---------- Styling from prefs (color, battery style, transparency) ----------
+    // ---------- Lock-state swap: LEFT zone only ever shows one group ----------
+
+    private fun applyLockState(isLocked: Boolean) {
+        val view = overlayView ?: return
+        view.findViewById<TextView>(R.id.tvCarrierName)?.visibility =
+            if (isLocked && prefs.showCarrierName) View.VISIBLE else View.GONE
+        view.findViewById<LinearLayout>(R.id.unlockedLeftGroup)?.visibility =
+            if (isLocked) View.GONE else View.VISIBLE
+    }
+
+    // ---------- Styling from prefs ----------
 
     private fun applyPrefsToView() {
         val view = overlayView ?: return
@@ -170,12 +170,12 @@ class StatusBarAccessibilityService : AccessibilityService() {
         view.findViewById<ImageView>(R.id.ivSignal)?.setColorFilter(color)
         iconManager?.setTint(color)
 
-        // Real One UI has no solid bar fill - icons/text float over the
-        // wallpaper or app content. Transparent is the default; solid black
-        // is offered as a fallback for readability over busy backgrounds.
-        view.setBackgroundColor(
-            if (prefs.transparentBackground) Color.TRANSPARENT else resources.getColor(R.color.bar_black, theme)
-        )
+        // "Fake transparency": the bar is ALWAYS opaque - it never lets the
+        // real system UI show through. When sampling is unavailable/fails,
+        // we use a fixed fallback color instead of ever going transparent.
+        if (!prefs.fakeTransparencyEnabled) {
+            animateToColor(prefs.fallbackBarColor)
+        }
 
         val batteryPct = view.findViewById<TextView>(R.id.tvBatteryPct)
         val batteryIcon = view.findViewById<ImageView>(R.id.ivBatteryIcon)
@@ -185,8 +185,7 @@ class StatusBarAccessibilityService : AccessibilityService() {
             else -> Unit
         }
 
-        view.findViewById<TextView>(R.id.tvCarrierName)?.visibility =
-            if (prefs.showCarrierName) View.VISIBLE else View.GONE
+        applyLockState(lastState.isLocked)
     }
 
     // ---------- Carrier name + network type ----------
@@ -204,7 +203,7 @@ class StatusBarAccessibilityService : AccessibilityService() {
         view.findViewById<TextView>(R.id.tvNetworkType)?.text = networkLabel
     }
 
-    // ---------- Fake notification icons (real installed-app icons, max 5) ----------
+    // ---------- Fake notification icons ----------
 
     private fun loadFakeNotificationIcons() {
         val row = overlayView?.findViewById<LinearLayout>(R.id.notificationIconRow) ?: return
@@ -225,7 +224,7 @@ class StatusBarAccessibilityService : AccessibilityService() {
         }
     }
 
-    // ---------- Clock (per-minute unless the format includes seconds - saves battery) ----------
+    // ---------- Clock ----------
 
     private fun startClockTicker() {
         val tickMillis = if (prefs.clockFormat.contains("s")) 1000L else 60_000L
@@ -243,7 +242,32 @@ class StatusBarAccessibilityService : AccessibilityService() {
         overlayView?.findViewById<TextView>(R.id.tvClock)?.text = format.format(Date())
     }
 
-    // ---------- Battery ----------
+    // ---------- Fake transparency: opaque bar smoothly matched to sampled color ----------
+
+    private fun animateToColor(target: Int) {
+        val view = overlayView ?: return
+        if (target == currentBarColor) return
+        val animator = android.animation.ValueAnimator.ofObject(
+            android.animation.ArgbEvaluator(), currentBarColor, target
+        )
+        animator.duration = 350
+        animator.addUpdateListener { view.setBackgroundColor(it.animatedValue as Int) }
+        animator.start()
+        currentBarColor = target
+    }
+
+    private fun requestColorSample() {
+        if (!prefs.fakeTransparencyEnabled) return
+        colorSampler.sample(currentBarHeightPx()) { result ->
+            when (result) {
+                is SampleResult.Success -> animateToColor(result.color)
+                is SampleResult.Failed -> animateToColor(prefs.fallbackBarColor)
+                is SampleResult.Throttled -> Unit // keep current color, don't flicker
+            }
+        }
+    }
+
+    // ---------- Battery (real charging state, not a static icon) ----------
 
     private fun updateBattery(intent: Intent) {
         val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
@@ -253,34 +277,79 @@ class StatusBarAccessibilityService : AccessibilityService() {
         overlayView?.findViewById<TextView>(R.id.tvBatteryPct)?.text = "$pct%"
     }
 
-    // ---------- Auto-hide in fullscreen / immersive apps ----------
+    private fun applyChargingIcon(isCharging: Boolean) {
+        val iconRes = if (isCharging) R.drawable.ic_status_battery_charging else R.drawable.ic_status_battery
+        overlayView?.findViewById<ImageView>(R.id.ivBatteryIcon)?.setImageResource(iconRes)
+    }
+
+    // ---------- Auto-hide: fullscreen apps, real status bar hidden, or shade/quick-settings open ----------
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+
+        // Shade/quick-settings open: always hide, independent of the auto-hide toggle.
+        shadeForcedHidden = isShadeOrQuickSettingsOpen()
+
+        if (shadeForcedHidden) {
+            setOverlayVisible(false)
+            return
+        }
+
         if (!prefs.autoHideEnabled) {
             setOverlayVisible(true)
             return
         }
-        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            setOverlayVisible(!isForegroundAppFullscreen())
-        }
+
+        val realBarHidden = isRealStatusBarWindowAbsent()
+        val fullscreenApp = isForegroundAppFullscreen()
+        val shouldShow = !(realBarHidden || fullscreenApp)
+        setOverlayVisible(shouldShow)
+        if (shouldShow) requestColorSample()
     }
 
     /**
-     * Heuristic: if the topmost application window's bounds start at
-     * y = 0 (drawing into the area the status bar would normally occupy)
-     * and cover the full screen height, treat the app as fullscreen/
-     * immersive and hide our overlay - exactly when the real system
-     * status bar would also hide.
+     * Most reliable auto-hide signal: check whether the real system status-bar
+     * window itself is still present in the window list, instead of guessing
+     * from the foreground app's bounds. If it's gone, the real bar is hidden
+     * (immersive mode) and ours should hide too.
      */
+    private fun isRealStatusBarWindowAbsent(): Boolean {
+        val windowList = windows ?: return false
+        val statusBarHeight = currentBarHeightPx()
+        val hasStatusBarWindow = windowList.any { w ->
+            if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) return@any false
+            val b = Rect()
+            w.getBoundsInScreen(b)
+            b.top <= 0 && b.height() in 1..(statusBarHeight * 2)
+        }
+        return !hasStatusBarWindow
+    }
+
+    /**
+     * Heuristic: a top-anchored window taller than ~3x the status bar but not
+     * full screen is very likely the notification shade or quick settings
+     * panel expanded down. Best-effort - some OEM dialogs could false-positive.
+     */
+    private fun isShadeOrQuickSettingsOpen(): Boolean {
+        val windowList = windows ?: return false
+        val statusBarHeight = currentBarHeightPx()
+        val displayHeight = resources.displayMetrics.heightPixels
+        return windowList.any { w ->
+            val b = Rect()
+            w.getBoundsInScreen(b)
+            b.top <= 0 && b.height() > statusBarHeight * 3 && b.height() < displayHeight
+        }
+    }
+
     private fun isForegroundAppFullscreen(): Boolean {
         val windowList = windows ?: return false
         val displayHeight = resources.displayMetrics.heightPixels
         val statusBarHeight = currentBarHeightPx()
 
         for (w in windowList) {
-            if (w.type != android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION) continue
+            if (w.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
             if (!w.isFocused && !w.isActive) continue
-            val bounds = android.graphics.Rect()
+            val bounds = Rect()
             w.getBoundsInScreen(bounds)
             val coversStatusBarArea = bounds.top <= 0
             val coversFullHeight = bounds.height() >= displayHeight - statusBarHeight / 2

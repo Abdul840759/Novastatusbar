@@ -123,9 +123,29 @@ class MainActivity : AppCompatActivity() {
     // ---------- Simple toggles ----------
 
     private fun setupTransparencySwitch() {
-        binding.switchTransparent.isChecked = prefs.transparentBackground
+        binding.switchTransparent.isChecked = prefs.fakeTransparencyEnabled
         binding.switchTransparent.setOnCheckedChangeListener { _, isChecked ->
-            prefs.transparentBackground = isChecked
+            prefs.fakeTransparencyEnabled = isChecked
+        }
+        setupFallbackColorSwatches()
+    }
+
+    private fun setupFallbackColorSwatches() {
+        binding.fallbackColorSwatchRow.removeAllViews()
+        val fallbackColors = intArrayOf(
+            Color.BLACK,
+            Color.parseColor("#1A1A1A"),
+            Color.WHITE,
+            Color.parseColor("#1428A0"),
+            Color.parseColor("#34C759")
+        )
+        for (color in fallbackColors) {
+            val swatch = View(this).apply {
+                layoutParams = LinearLayout.LayoutParams(48, 48).apply { marginEnd = 24 }
+                setBackgroundColor(color)
+                setOnClickListener { prefs.fallbackBarColor = color }
+            }
+            binding.fallbackColorSwatchRow.addView(swatch)
         }
     }
 

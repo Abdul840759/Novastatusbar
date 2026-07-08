@@ -28,10 +28,15 @@ class PrefsManager(context: Context) {
         get() = prefs.getBoolean(KEY_OVERLAY_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_OVERLAY_ENABLED, value).apply()
 
-    /** Real One UI has no solid fill behind the icons - default to true. */
-    var transparentBackground: Boolean
-        get() = prefs.getBoolean(KEY_TRANSPARENT_BG, true)
-        set(value) = prefs.edit().putBoolean(KEY_TRANSPARENT_BG, value).apply()
+    /** "Fake transparency": opaque bar painted to match the sampled app background color. */
+    var fakeTransparencyEnabled: Boolean
+        get() = prefs.getBoolean(KEY_FAKE_TRANSPARENCY, true)
+        set(value) = prefs.edit().putBoolean(KEY_FAKE_TRANSPARENCY, value).apply()
+
+    /** Used whenever sampling isn't available (pre-Android 11) or fails (secure lock screens, etc). */
+    var fallbackBarColor: Int
+        get() = prefs.getInt(KEY_FALLBACK_COLOR, Color.BLACK)
+        set(value) = prefs.edit().putInt(KEY_FALLBACK_COLOR, value).apply()
 
     /** Hide the overlay in fullscreen/immersive apps, like the real status bar. */
     var autoHideEnabled: Boolean
@@ -77,7 +82,8 @@ class PrefsManager(context: Context) {
         private const val KEY_BATTERY_STYLE = "battery_style"
         private const val KEY_ICON_COLOR = "icon_color"
         private const val KEY_OVERLAY_ENABLED = "overlay_enabled"
-        private const val KEY_TRANSPARENT_BG = "transparent_background"
+        private const val KEY_FAKE_TRANSPARENCY = "fake_transparency_enabled"
+        private const val KEY_FALLBACK_COLOR = "fallback_bar_color"
         private const val KEY_AUTO_HIDE = "auto_hide_enabled"
         private const val KEY_CARRIER_NAME = "carrier_name_override"
         private const val KEY_SHOW_CARRIER = "show_carrier_name"

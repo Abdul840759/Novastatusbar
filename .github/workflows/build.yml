@@ -6,6 +6,9 @@ on:
     tags: [ 'v*' ]
   workflow_dispatch: {}
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -41,6 +44,21 @@ jobs:
         with:
           name: nova-status-bar-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Commit APK into releases/ for a direct raw-link download
+        if: github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p releases
+          cp app/build/outputs/apk/debug/app-debug.apk releases/nova-status-bar.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add releases/nova-status-bar.apk
+          if git diff --cached --quiet; then
+            echo "APK unchanged, nothing to commit"
+          else
+            git commit -m "chore: update built APK [skip ci]"
+            git push
+          fi
 
       - name: Attach APK to GitHub Release (tag pushes only)
         if: startsWith(github.ref, 'refs/tags/v')
