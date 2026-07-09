@@ -5,23 +5,34 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Phone body outline -->
+    <!-- Hand/palm shape holding the phone from below -->
+    <path
+        android:fillColor="#0F1F80"
+        android:pathData="M20,64 C20,56 26,50 34,50 L74,50 C84,50 92,58 92,68 L92,88 C92,96 86,102 78,102 L36,102 C26,102 18,94 18,84 Z" />
+
+    <!-- Fingers wrapping the left edge of the phone -->
+    <path android:fillColor="#0F1F80" android:pathData="M22,58 a6,9 0 1,0 0.1,0 z" />
+    <path android:fillColor="#0F1F80" android:pathData="M20,70 a6,9 0 1,0 0.1,0 z" />
+    <path android:fillColor="#0F1F80" android:pathData="M20,82 a6,9 0 1,0 0.1,0 z" />
+
+    <!-- Phone body, tilted slightly like it's being held up -->
     <path
         android:strokeColor="#FFFFFF"
         android:strokeWidth="4"
-        android:pathData="M38,20 h32 a8,8 0 0 1 8,8 v52 a8,8 0 0 1 -8,8 h-32 a8,8 0 0 1 -8,-8 v-52 a8,8 0 0 1 8,-8 z" />
+        android:fillColor="#1428A0"
+        android:pathData="M32,14 h34 a7,7 0 0 1 7,7 v58 a7,7 0 0 1 -7,7 h-34 a7,7 0 0 1 -7,-7 v-58 a7,7 0 0 1 7,-7 z" />
 
-    <!-- Status bar strip at the top of the phone -->
+    <!-- Status bar strip inside the phone screen -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M34,24 h40 v10 h-40 z" />
+        android:pathData="M29,18 h38 v9 h-38 z" />
 
-    <!-- Status bar dots/icons (clock + battery pill motif) -->
-    <path android:fillColor="#1428A0" android:pathData="M38,27.5m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0" />
-    <path android:fillColor="#1428A0" android:pathData="M64,26h8a2,2 0,0 1,2 2v3a2,2 0,0 1,-2 2h-8a2,2 0,0 1,-2 -2v-3a2,2 0,0 1,2 -2z" />
+    <!-- Status bar dot + pill (clock + battery motif) -->
+    <path android:fillColor="#1428A0" android:pathData="M33,22.5m-1.8,0a1.8,1.8 0,1 1,3.6 0a1.8,1.8 0,1 1,-3.6 0" />
+    <path android:fillColor="#1428A0" android:pathData="M58,20.5h6a2,2 0,0 1,2 2v0a2,2 0,0 1,-2 2h-6a2,2 0,0 1,-2 -2v0a2,2 0,0 1,2 -2z" />
 
     <!-- Home indicator -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M46,82 h16 v3 h-16 z" />
+        android:pathData="M42,73 h14 v3 h-14 z" />
 </vector>

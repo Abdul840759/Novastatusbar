@@ -11,6 +11,7 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.os.BatteryManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.DisplayMetrics
@@ -112,6 +113,10 @@ class StatusBarAccessibilityService : AccessibilityService() {
             PixelFormat.TRANSLUCENT
         )
         params.gravity = android.view.Gravity.TOP
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            params.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
 
         windowManager.addView(view, params)
         overlayView = view
@@ -119,6 +124,7 @@ class StatusBarAccessibilityService : AccessibilityService() {
 
         iconManager = StatusIconManager(this, view.findViewById(R.id.systemIconRow))
         applyPrefsToView()
+        applyCutoutSafeMargins()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -130,6 +136,34 @@ class StatusBarAccessibilityService : AccessibilityService() {
             windowManager.updateViewLayout(view, params)
         } catch (_: IllegalArgumentException) {
             // View was already detached - ignore.
+        }
+        applyCutoutSafeMargins()
+    }
+
+    /**
+     * Uses the REAL display cutout safe insets instead of a hardcoded margin,
+     * so icons never overlap the notch regardless of device/cutout shape.
+     */
+    private fun applyCutoutSafeMargins() {
+        val view = overlayView ?: return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
+        view.post {
+            val insets = view.rootWindowInsets ?: return@post
+            val cutout = insets.displayCutout ?: return@post
+            val minMargin = dpToPx(16)
+            val left = maxOf(minMargin, cutout.safeInsetLeft)
+            val right = maxOf(minMargin, cutout.safeInsetRight)
+
+            view.findViewById<View>(R.id.leftZone)?.let {
+                val lp = it.layoutParams as android.widget.RelativeLayout.LayoutParams
+                lp.marginStart = left
+                it.layoutParams = lp
+            }
+            view.findViewById<View>(R.id.rightZone)?.let {
+                val lp = it.layoutParams as android.widget.RelativeLayout.LayoutParams
+                lp.marginEnd = right
+                it.layoutParams = lp
+            }
         }
     }
 
@@ -166,7 +200,7 @@ class StatusBarAccessibilityService : AccessibilityService() {
         view.findViewById<TextView>(R.id.tvBatteryPct)?.setTextColor(color)
         view.findViewById<TextView>(R.id.tvCarrierName)?.setTextColor(color)
         view.findViewById<TextView>(R.id.tvNetworkType)?.setTextColor(color)
-        view.findViewById<ImageView>(R.id.ivBatteryIcon)?.setColorFilter(color)
+        view.findViewById<BatteryIconView>(R.id.batteryIconView)?.iconColor = color
         view.findViewById<ImageView>(R.id.ivSignal)?.setColorFilter(color)
         iconManager?.setTint(color)
 
@@ -178,9 +212,9 @@ class StatusBarAccessibilityService : AccessibilityService() {
         }
 
         val batteryPct = view.findViewById<TextView>(R.id.tvBatteryPct)
-        val batteryIcon = view.findViewById<ImageView>(R.id.ivBatteryIcon)
+        val batteryIconView = view.findViewById<BatteryIconView>(R.id.batteryIconView)
         when (prefs.batteryStyleIndex) {
-            1 -> batteryIcon?.visibility = View.GONE
+            1 -> batteryIconView?.visibility = View.GONE
             2 -> batteryPct?.visibility = View.GONE
             else -> Unit
         }
@@ -275,11 +309,11 @@ class StatusBarAccessibilityService : AccessibilityService() {
         if (level < 0 || scale <= 0) return
         val pct = (level * 100) / scale
         overlayView?.findViewById<TextView>(R.id.tvBatteryPct)?.text = "$pct%"
+        overlayView?.findViewById<BatteryIconView>(R.id.batteryIconView)?.levelPercent = pct
     }
 
     private fun applyChargingIcon(isCharging: Boolean) {
-        val iconRes = if (isCharging) R.drawable.ic_status_battery_charging else R.drawable.ic_status_battery
-        overlayView?.findViewById<ImageView>(R.id.ivBatteryIcon)?.setImageResource(iconRes)
+        overlayView?.findViewById<BatteryIconView>(R.id.batteryIconView)?.isCharging = isCharging
     }
 
     // ---------- Auto-hide: fullscreen apps, real status bar hidden, or shade/quick-settings open ----------
@@ -334,25 +368,27 @@ class StatusBarAccessibilityService : AccessibilityService() {
      * full screen is very likely the notification shade or quick settings
      * panel expanded down. Best-effort - some OEM dialogs could false-positive.
      */
+    private val systemUiPackageHints = listOf("systemui", "phonemanager", "notificationpanel", "statusbar")
+
     private fun isShadeOrQuickSettingsOpen(): Boolean {
         if (!prefs.hideOnShadeOpen) return false
         val windowList = windows ?: return false
         val statusBarHeight = currentBarHeightPx()
-        val displayHeight = resources.displayMetrics.heightPixels
-        return windowList.any { w ->
-            // Restrict to TYPE_SYSTEM only - normal app windows are
-            // TYPE_APPLICATION and must never match here (that was the bug:
-            // almost every app window is "less than full display height"
-            // once status/nav bar insets are subtracted, so it matched
-            // constantly). Shade/quick-settings panels are system windows,
-            // clearly taller than the thin status bar, but not full screen.
-            if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) return@any false
+        for (w in windowList) {
+            val pkg = try {
+                w.root?.packageName?.toString()?.lowercase()
+            } catch (_: Exception) {
+                null
+            } ?: continue
+            if (systemUiPackageHints.none { pkg.contains(it) }) continue
             val b = Rect()
             w.getBoundsInScreen(b)
-            b.top <= 0 &&
-                b.height() > statusBarHeight * 4 &&
-                b.height() < (displayHeight * 0.85)
+            // The thin status bar strip itself is also a systemui window - only
+            // treat it as the shade/quick-settings panel when it's clearly
+            // taller than just that strip.
+            if (b.top <= 0 && b.height() > statusBarHeight * 3) return true
         }
+        return false
     }
 
     private fun isForegroundAppFullscreen(): Boolean {

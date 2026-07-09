@@ -98,12 +98,10 @@
             android:gravity="center_vertical"
             android:paddingHorizontal="8dp">
 
-            <ImageView
-                android:id="@+id/ivBatteryIcon"
-                android:layout_width="14dp"
-                android:layout_height="14dp"
-                android:src="@drawable/ic_status_battery"
-                android:contentDescription="@null" />
+            <com.abdulazeez.statusclone.BatteryIconView
+                android:id="@+id/batteryIconView"
+                android:layout_width="22dp"
+                android:layout_height="12dp" />
 
             <TextView
                 android:id="@+id/tvBatteryPct"
