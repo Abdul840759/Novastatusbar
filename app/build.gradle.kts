@@ -7,6 +7,15 @@ android {
     namespace = "com.abdulazeez.statusclone"
     compileSdk = 34
 
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("../debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.abdulazeez.statusclone"
         minSdk = 24
@@ -16,6 +25,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
         }
