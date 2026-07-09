@@ -316,8 +316,12 @@ class StatusBarAccessibilityService : AccessibilityService() {
     private fun isRealStatusBarWindowAbsent(): Boolean {
         val windowList = windows ?: return false
         val statusBarHeight = currentBarHeightPx()
-        val hasStatusBarWindow = windowList.any { w ->
-            if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) return@any false
+        val systemWindows = windowList.filter { it.type == AccessibilityWindowInfo.TYPE_SYSTEM }
+        // If this device/OEM never reports any TYPE_SYSTEM window at all, we
+        // can't determine anything from this signal - fail safe by assuming
+        // the real bar IS visible, rather than hiding ours permanently.
+        if (systemWindows.isEmpty()) return false
+        val hasStatusBarWindow = systemWindows.any { w ->
             val b = Rect()
             w.getBoundsInScreen(b)
             b.top <= 0 && b.height() in 1..(statusBarHeight * 2)
@@ -331,13 +335,23 @@ class StatusBarAccessibilityService : AccessibilityService() {
      * panel expanded down. Best-effort - some OEM dialogs could false-positive.
      */
     private fun isShadeOrQuickSettingsOpen(): Boolean {
+        if (!prefs.hideOnShadeOpen) return false
         val windowList = windows ?: return false
         val statusBarHeight = currentBarHeightPx()
         val displayHeight = resources.displayMetrics.heightPixels
         return windowList.any { w ->
+            // Restrict to TYPE_SYSTEM only - normal app windows are
+            // TYPE_APPLICATION and must never match here (that was the bug:
+            // almost every app window is "less than full display height"
+            // once status/nav bar insets are subtracted, so it matched
+            // constantly). Shade/quick-settings panels are system windows,
+            // clearly taller than the thin status bar, but not full screen.
+            if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) return@any false
             val b = Rect()
             w.getBoundsInScreen(b)
-            b.top <= 0 && b.height() > statusBarHeight * 3 && b.height() < displayHeight
+            b.top <= 0 &&
+                b.height() > statusBarHeight * 4 &&
+                b.height() < (displayHeight * 0.85)
         }
     }
 

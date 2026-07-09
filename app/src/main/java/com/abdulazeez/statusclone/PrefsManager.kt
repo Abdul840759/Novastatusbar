@@ -43,6 +43,11 @@ class PrefsManager(context: Context) {
         get() = prefs.getBoolean(KEY_AUTO_HIDE, true)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_HIDE, value).apply()
 
+    /** Separate kill-switch for the shade/quick-settings-open detector, useful for isolating bugs. */
+    var hideOnShadeOpen: Boolean
+        get() = prefs.getBoolean(KEY_HIDE_ON_SHADE, true)
+        set(value) = prefs.edit().putBoolean(KEY_HIDE_ON_SHADE, value).apply()
+
     /** Empty string = use the real carrier name reported by TelephonyManager. */
     var carrierNameOverride: String
         get() = prefs.getString(KEY_CARRIER_NAME, "") ?: ""
@@ -85,6 +90,7 @@ class PrefsManager(context: Context) {
         private const val KEY_FAKE_TRANSPARENCY = "fake_transparency_enabled"
         private const val KEY_FALLBACK_COLOR = "fallback_bar_color"
         private const val KEY_AUTO_HIDE = "auto_hide_enabled"
+        private const val KEY_HIDE_ON_SHADE = "hide_on_shade_open"
         private const val KEY_CARRIER_NAME = "carrier_name_override"
         private const val KEY_SHOW_CARRIER = "show_carrier_name"
         private const val KEY_NETWORK_MODE = "network_type_mode"

@@ -154,6 +154,10 @@ class MainActivity : AppCompatActivity() {
         binding.switchAutoHide.setOnCheckedChangeListener { _, isChecked ->
             prefs.autoHideEnabled = isChecked
         }
+        binding.switchHideOnShade.isChecked = prefs.hideOnShadeOpen
+        binding.switchHideOnShade.setOnCheckedChangeListener { _, isChecked ->
+            prefs.hideOnShadeOpen = isChecked
+        }
     }
 
     private fun setupSystemIconsSwitch() {
