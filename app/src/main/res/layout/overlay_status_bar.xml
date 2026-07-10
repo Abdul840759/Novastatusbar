@@ -90,26 +90,29 @@
             android:contentDescription="@null" />
 
         <LinearLayout
+            android:id="@+id/batteryPillContainer"
             android:layout_width="wrap_content"
             android:layout_height="22dp"
             android:layout_marginStart="8dp"
-            android:background="@drawable/bg_pill"
+            android:background="@drawable/bg_pill_solid"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:paddingHorizontal="8dp">
+            android:paddingHorizontal="10dp">
 
             <com.abdulazeez.statusclone.BatteryIconView
                 android:id="@+id/batteryIconView"
                 android:layout_width="22dp"
-                android:layout_height="12dp" />
+                android:layout_height="12dp"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/tvBatteryPct"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="4dp"
-                android:text="100%"
-                android:textColor="@color/bar_white"
+                android:text="100"
+                android:textColor="#000000"
+                android:textStyle="bold"
                 android:textSize="12sp" />
         </LinearLayout>
 

@@ -17,7 +17,7 @@ class PrefsManager(context: Context) {
         set(value) = prefs.edit().putString(KEY_CLOCK_FORMAT, value).apply()
 
     var batteryStyleIndex: Int
-        get() = prefs.getInt(KEY_BATTERY_STYLE, 0)
+        get() = prefs.getInt(KEY_BATTERY_STYLE, 1)
         set(value) = prefs.edit().putInt(KEY_BATTERY_STYLE, value).apply()
 
     var iconColor: Int

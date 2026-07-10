@@ -65,20 +65,33 @@ class StatusBarAccessibilityService : AccessibilityService() {
         startClockTicker()
         registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         colorSampler = BackgroundColorSampler(this)
+        homePackage = resolveHomePackage()
 
         stateWatcher = SystemStateWatcher(this) { state ->
+            val wasLocked = lastState.isLocked
             lastState = state
             if (prefs.showSystemStateIcons) iconManager?.render(state)
             applyLockState(state.isLocked)
             applyChargingIcon(state.isCharging)
+            if (state.isLocked != wasLocked) updateBarColorForContext(lastForegroundPackage)
         }
         stateWatcher.start()
 
         loadFakeNotificationIcons()
         updateCarrierAndNetworkType()
-        requestColorSample()
+        updateBarColorForContext(null)
 
         prefs.raw.registerOnSharedPreferenceChangeListener(prefsListener)
+    }
+
+    /** The real launcher's package name, so we only fake-transparency-match on the actual home screen. */
+    private var homePackage: String? = null
+    private var lastForegroundPackage: String? = null
+
+    private fun resolveHomePackage(): String? {
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val resolveInfo = packageManager.resolveActivity(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+        return resolveInfo?.activityInfo?.packageName
     }
 
     private val prefsListener =
@@ -91,7 +104,7 @@ class StatusBarAccessibilityService : AccessibilityService() {
                 updateCarrierAndNetworkType()
             }
             if (key == "fake_transparency_enabled" || key == "fallback_bar_color") {
-                requestColorSample()
+                updateBarColorForContext(lastForegroundPackage)
             }
         }
 
@@ -151,8 +164,9 @@ class StatusBarAccessibilityService : AccessibilityService() {
             val insets = view.rootWindowInsets ?: return@post
             val cutout = insets.displayCutout ?: return@post
             val minMargin = dpToPx(16)
-            val left = maxOf(minMargin, cutout.safeInsetLeft)
-            val right = maxOf(minMargin, cutout.safeInsetRight)
+            val notchBuffer = dpToPx(8)
+            val left = maxOf(minMargin, cutout.safeInsetLeft + notchBuffer)
+            val right = maxOf(minMargin, cutout.safeInsetRight + notchBuffer)
 
             view.findViewById<View>(R.id.leftZone)?.let {
                 val lp = it.layoutParams as android.widget.RelativeLayout.LayoutParams
@@ -213,10 +227,28 @@ class StatusBarAccessibilityService : AccessibilityService() {
 
         val batteryPct = view.findViewById<TextView>(R.id.tvBatteryPct)
         val batteryIconView = view.findViewById<BatteryIconView>(R.id.batteryIconView)
+        val pillContainer = view.findViewById<LinearLayout>(R.id.batteryPillContainer)
         when (prefs.batteryStyleIndex) {
-            1 -> batteryIconView?.visibility = View.GONE
-            2 -> batteryPct?.visibility = View.GONE
-            else -> Unit
+            // Default: solid white pill, number only, no icon - matches the reference exactly.
+            1 -> {
+                batteryIconView?.visibility = View.GONE
+                batteryPct?.visibility = View.VISIBLE
+                batteryPct?.setTextColor(Color.BLACK)
+                pillContainer?.setBackgroundResource(R.drawable.bg_pill_solid)
+            }
+            // Icon only: translucent pill, outline+fill battery glyph, no number.
+            2 -> {
+                batteryIconView?.visibility = View.VISIBLE
+                batteryPct?.visibility = View.GONE
+                pillContainer?.setBackgroundResource(R.drawable.bg_pill)
+            }
+            // Icon + percentage: translucent pill, both icon and number in the bar's icon color.
+            else -> {
+                batteryIconView?.visibility = View.VISIBLE
+                batteryPct?.visibility = View.VISIBLE
+                batteryPct?.setTextColor(color)
+                pillContainer?.setBackgroundResource(R.drawable.bg_pill)
+            }
         }
 
         applyLockState(lastState.isLocked)
@@ -291,13 +323,36 @@ class StatusBarAccessibilityService : AccessibilityService() {
     }
 
     private fun requestColorSample() {
-        if (!prefs.fakeTransparencyEnabled) return
         colorSampler.sample(currentBarHeightPx()) { result ->
             when (result) {
                 is SampleResult.Success -> animateToColor(result.color)
                 is SampleResult.Failed -> animateToColor(prefs.fallbackBarColor)
                 is SampleResult.Throttled -> Unit // keep current color, don't flicker
             }
+        }
+    }
+
+    /**
+     * The actual rule you asked for: only match the wallpaper color on the
+     * real home screen/launcher. Everywhere else - regular apps AND the lock
+     * screen - stays solid black (or your chosen fallback color). This also
+     * means we only ever need to sample once per home-screen visit instead
+     * of on every app switch, which is lighter on battery too.
+     */
+    private fun updateBarColorForContext(foregroundPackage: String?) {
+        if (!prefs.fakeTransparencyEnabled) {
+            animateToColor(prefs.fallbackBarColor)
+            return
+        }
+        if (lastState.isLocked) {
+            animateToColor(prefs.fallbackBarColor)
+            return
+        }
+        val isHome = foregroundPackage != null && foregroundPackage == homePackage
+        if (isHome) {
+            requestColorSample()
+        } else {
+            animateToColor(prefs.fallbackBarColor)
         }
     }
 
@@ -308,7 +363,7 @@ class StatusBarAccessibilityService : AccessibilityService() {
         val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
         if (level < 0 || scale <= 0) return
         val pct = (level * 100) / scale
-        overlayView?.findViewById<TextView>(R.id.tvBatteryPct)?.text = "$pct%"
+        overlayView?.findViewById<TextView>(R.id.tvBatteryPct)?.text = "$pct"
         overlayView?.findViewById<BatteryIconView>(R.id.batteryIconView)?.levelPercent = pct
     }
 
@@ -320,6 +375,9 @@ class StatusBarAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+
+        lastForegroundPackage = event.packageName?.toString()
+        updateBarColorForContext(lastForegroundPackage)
 
         // Shade/quick-settings open: always hide, independent of the auto-hide toggle.
         shadeForcedHidden = isShadeOrQuickSettingsOpen()
@@ -336,9 +394,7 @@ class StatusBarAccessibilityService : AccessibilityService() {
 
         val realBarHidden = isRealStatusBarWindowAbsent()
         val fullscreenApp = isForegroundAppFullscreen()
-        val shouldShow = !(realBarHidden || fullscreenApp)
-        setOverlayVisible(shouldShow)
-        if (shouldShow) requestColorSample()
+        setOverlayVisible(!(realBarHidden || fullscreenApp))
     }
 
     /**
